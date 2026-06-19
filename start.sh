@@ -65,9 +65,21 @@ export DATA_FOLDER="$VW_DATA"
 # Upgrade and the OpenHost router proxies it end-to-end.
 export ENABLE_WEBSOCKET="${ENABLE_WEBSOCKET:-true}"
 
-# Admin panel auth — the value the proxy will POST to /admin/ to log the
-# owner in. Stored raw (not hashed) precisely so the proxy can present it.
-export ADMIN_TOKEN="$ADMIN_TOKEN_VALUE"
+# Admin panel auth. The auth-proxy presents the *plaintext* token (from
+# $TOKEN_FILE) at /admin/ to log the owner in; ADMIN_TOKEN here is the Argon2id
+# *hash* of that token, which Vaultwarden verifies the plaintext against. Storing
+# the hash (not the plaintext) means a leaked config/env doesn't directly grant
+# admin, and clears Vaultwarden's plaintext-ADMIN_TOKEN warning. The hash is
+# persisted once (idempotent) so restarts don't rotate it and drop the owner's
+# admin session.
+HASH_FILE="$DATA_DIR/admin_token_hash.txt"
+if [ ! -s "$HASH_FILE" ]; then
+    salt="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+    printf '%s' "$ADMIN_TOKEN_VALUE" | argon2 "$salt" -id -e -t 3 -m 15 -p 1 > "$HASH_FILE"
+    chmod 0600 "$HASH_FILE"
+    log "hashed ADMIN_TOKEN (Argon2id) -> $HASH_FILE"
+fi
+export ADMIN_TOKEN="$(cat "$HASH_FILE")"
 
 # Derive DOMAIN so Vaultwarden emits correct absolute URLs + WebAuthn origin.
 # On localhost-style dev zones the router may run on a non-443 port; honor it.

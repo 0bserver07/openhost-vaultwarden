@@ -19,10 +19,11 @@
 FROM docker.io/vaultwarden/server:latest
 
 # tini reaps zombies + forwards SIGTERM to our supervisor; python3 runs the
-# auth-proxy + bootstrap. ca-certificates is already present in the upstream
-# image (Vaultwarden needs it for icon fetching / HIBP), listed defensively.
+# auth-proxy + bootstrap; argon2 hashes the ADMIN_TOKEN so Vaultwarden stores a
+# hash, not plaintext. ca-certificates is already present in the upstream image
+# (Vaultwarden needs it for icon fetching / HIBP), listed defensively.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 tini ca-certificates \
+    && apt-get install -y --no-install-recommends python3 tini ca-certificates argon2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Our supervisor + auth-proxy + bootstrap live outside / so they don't shadow
