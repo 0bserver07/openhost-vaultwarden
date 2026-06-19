@@ -84,14 +84,17 @@ case "$ZONE_DOMAIN" in
         ;;
 esac
 
-# Lock down account creation by default: a self-hosted vault is single-tenant
-# (the zone owner). The owner can flip these from the admin panel later, or an
-# operator can override at deploy time. Invitations still work via the admin
-# panel even with signups closed.
-export SIGNUPS_ALLOWED="${SIGNUPS_ALLOWED:-false}"
-export SIGNUPS_VERIFY="${SIGNUPS_VERIFY:-true}"
-# Lets the owner create their FIRST account from the web vault without SMTP.
-# Once an account exists, set to "" to require admin invitations.
+# First-run bootstrap. There is no SMTP out of the box, so the owner must be able
+# to create their account directly from the web vault — that needs signups ON and
+# email verification OFF (verification can never complete without SMTP). This is
+# the standard Vaultwarden self-host bootstrap; an admin invite WITHOUT SMTP does
+# not let the invitee finish registration, so closed-signups + invites is a trap.
+#
+# IMPORTANT: once you've created your account, lock the vault to single-tenant by
+# setting SIGNUPS_ALLOWED=false (admin panel runtime toggle, or redeploy with the
+# env override) — otherwise anyone who reaches the URL can register.
+export SIGNUPS_ALLOWED="${SIGNUPS_ALLOWED:-true}"
+export SIGNUPS_VERIFY="${SIGNUPS_VERIFY:-false}"
 export INVITATIONS_ALLOWED="${INVITATIONS_ALLOWED:-true}"
 
 log "DATA_FOLDER=$DATA_FOLDER  DOMAIN=$DOMAIN  Rocket=127.0.0.1:$ROCKET_PORT  ws=$ENABLE_WEBSOCKET"
