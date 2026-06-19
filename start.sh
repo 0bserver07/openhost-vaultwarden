@@ -75,11 +75,22 @@ export ENABLE_WEBSOCKET="${ENABLE_WEBSOCKET:-true}"
 HASH_FILE="$DATA_DIR/admin_token_hash.txt"
 if [ ! -s "$HASH_FILE" ]; then
     salt="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
-    printf '%s' "$ADMIN_TOKEN_VALUE" | argon2 "$salt" -id -e -t 3 -m 15 -p 1 > "$HASH_FILE"
-    chmod 0600 "$HASH_FILE"
-    log "hashed ADMIN_TOKEN (Argon2id) -> $HASH_FILE"
+    if printf '%s' "$ADMIN_TOKEN_VALUE" | argon2 "$salt" -id -e -t 3 -m 15 -p 1 > "$HASH_FILE" 2>/dev/null \
+        && grep -q '^\$argon2id\$' "$HASH_FILE"; then
+        chmod 0600 "$HASH_FILE"
+        log "hashed ADMIN_TOKEN (Argon2id) -> $HASH_FILE"
+    else
+        # Fail-safe: never break admin login over a hashing hiccup. Fall back to
+        # the plaintext token (Vaultwarden's insecure-token warning will reappear).
+        log "WARN: argon2 hashing unavailable; using plaintext ADMIN_TOKEN"
+        rm -f "$HASH_FILE"
+    fi
 fi
-export ADMIN_TOKEN="$(cat "$HASH_FILE")"
+if [ -s "$HASH_FILE" ]; then
+    export ADMIN_TOKEN="$(cat "$HASH_FILE")"
+else
+    export ADMIN_TOKEN="$ADMIN_TOKEN_VALUE"
+fi
 
 # Derive DOMAIN so Vaultwarden emits correct absolute URLs + WebAuthn origin.
 # On localhost-style dev zones the router may run on a non-443 port; honor it.
