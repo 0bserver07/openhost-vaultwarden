@@ -1,0 +1,57 @@
+[app]
+name = "vaultwarden"
+version = "0.1.0"
+description = "Vaultwarden (Bitwarden-compatible password manager) for OpenHost — own your passwords; admin panel gated behind owner SSO"
+authors = ["Yad Konrad <yad.konrad@gmail.com>"]
+
+[runtime.container]
+image = "Dockerfile"
+# OpenHost-routed HTTP port. The auth-proxy listens here and forwards to
+# Vaultwarden's Rocket server on loopback :8001. The OpenHost router
+# terminates TLS, gates non-public paths behind zone_auth, and stamps
+# X-OpenHost-Is-Owner: true on owner requests.
+#
+# WebSocket notifications (live sync to browser/mobile/desktop clients)
+# ride this SAME port in modern Vaultwarden (ENABLE_WEBSOCKET=true) — no
+# separate port is needed, and the OpenHost router proxies the Upgrade
+# transparently.
+port = 8080
+
+[routing]
+# The auth-proxy serves a static 200 here so the OpenHost healthcheck does
+# not hit Vaultwarden's "/" (which redirects unauthenticated browsers to
+# the web-vault login and would confuse a redirect-following probe).
+health_check = "/_healthz"
+
+# IMPORTANT — why the whole app is "public" at the router layer:
+#
+# Vaultwarden IS a public, end-to-end-encrypted API. Bitwarden clients
+# (browser extension, mobile, desktop, CLI) authenticate with the user's
+# OWN email + master password and hold NO OpenHost zone_auth cookie, so
+# the vault endpoints (/, /api/, /identity/, /notifications/, the web
+# vault, icons, etc.) MUST be reachable without OpenHost auth or every
+# client breaks. The vault's secrecy comes from client-side encryption +
+# the master password, not from the OpenHost login gate.
+#
+# The ONE sensitive surface — the server admin panel at /admin — is the
+# exception. It is NOT covered by this public list, so the OpenHost router
+# keeps requiring zone_auth for /admin and stamps X-OpenHost-Is-Owner. The
+# auth-proxy then refuses /admin to anyone without that header (defense in
+# depth) and auto-logs the owner in. See auth_proxy.py + README.md.
+public_paths = ["/"]
+
+[resources]
+# Vaultwarden is a single small Rust binary (Rocket + SQLite). Idle RSS is
+# tens of MiB; this covers the web-vault static assets, icon cache, and a
+# handful of concurrent client syncs. Bump if you host many users or large
+# file attachments.
+memory_mb = 256
+cpu_millicores = 250
+
+[data]
+# Persistent: the SQLite vault database (db.sqlite3 + WAL), per-install RSA
+# signing keys (rsa_key.*), file attachments, icon cache, sends, and the
+# proxy-managed admin-token file. All under $OPENHOST_APP_DATA_DIR (backed
+# up). We do NOT request the `sqlite = [...]` provisioner because
+# Vaultwarden creates and migrates its own db file inside DATA_FOLDER.
+app_data = true

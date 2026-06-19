@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.log
+# Never commit a real admin token if one is ever produced locally.
+admin_token.txt
+vw-data/
